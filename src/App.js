@@ -84,7 +84,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/sendemail",
+        ""https://your-bulkmail-backend.vercel.app/sendemail"",
         {
           msg: msg,
           emailList: emailList
