@@ -37,7 +37,7 @@ function App() {
   function send()
   {
     setstatus(true)
-    axios.post("https://bulkmail-backend-one-omega.vercel.app/",{msg:msg,emailList:emailList})
+    axios.post("https://bulkmail-backend-one-omega.vercel.app/sendemail",{ msg: msg });
     .then(function(data)
     {
       if(data.data === true)
