@@ -38,18 +38,7 @@ function App() {
   {
     setstatus(true)
     axios.post("https://bulkmail-backend-one-omega.vercel.app/sendemail",{ msg: msg });
-    .then(function(data)
-    {
-      if(data.data === true)
-      {
-        alert("Email Sent Successfully")
-        setstatus(false)
-      }
-      else{
-        alert("Failed")
-        setstatus(false)
-      }
-    })
+   
   }
 
   return (
