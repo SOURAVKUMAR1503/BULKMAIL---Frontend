@@ -3,7 +3,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 
 const API_URL =
-  "https://bulkmail-backend-9r52-jh2zobs5x-sourav-43a2.vercel.app";
+  "https://bulkmail-backend-uzxa.vercel.app";
 
 function App() {
   const [msg, setMsg] = useState("");
