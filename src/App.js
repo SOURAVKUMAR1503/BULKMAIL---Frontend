@@ -1,211 +1,274 @@
-import { useState } from "react";
+```jsx
+import React, { useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
-const API_URL = "https://bulkmail-backend-9r52.vercel.app";
+const API_URL =
+  "https://bulkmail-backend-9r52-jh2zobs5x-sourav-43a2.vercel.app";
 
 function App() {
-  const [msg, setmsg] = useState("");
-  const [status, setstatus] = useState(false);
+  const [msg, setMsg] = useState("");
   const [emailList, setEmailList] = useState([]);
+  const [emailText, setEmailText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
-  // Handle message input
-  function handlemsg(event) {
-    setmsg(event.target.value);
-  }
+  // Excel file upload
+  const handleFileUpload = (event) => {
+    const file = event.target.files?.[0];
 
-  // Handle Excel file upload
-  function handlefile(event) {
-    const file = event.target.files[0];
-
-    if (!file) {
-      setEmailList([]);
-      return;
-    }
+    if (!file) return;
 
     const reader = new FileReader();
 
-    reader.onload = function (event) {
+    reader.onload = (e) => {
       try {
-        const workbook = XLSX.read(event.target.result, {
-          type: "array",
-        });
-
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(worksheet, {
           header: 1,
           defval: "",
         });
 
-        const emails = [
-          ...new Set(
-            rows
-              .map((row) => String(row[0] || "").trim())
-              .filter((email) =>
-                /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-              )
-          ),
-        ];
-
-        setEmailList(emails);
-
-        if (emails.length === 0) {
-          alert(
-            "No valid email addresses found in the first column."
+        const emails = rows
+          .flat()
+          .map((value) => String(value).trim())
+          .filter((value) =>
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
           );
-        }
+
+        const uniqueEmails = [...new Set(emails)];
+
+        setEmailList(uniqueEmails);
+        setEmailText(uniqueEmails.join("\n"));
+        setStatus(
+          uniqueEmails.length > 0
+            ? `${uniqueEmails.length} email addresses loaded.`
+            : "No valid email addresses found in the file."
+        );
       } catch (error) {
         console.error("Excel file error:", error);
-        alert("Unable to read this Excel file.");
-        setEmailList([]);
+        setStatus("Unable to read the Excel file.");
       }
     };
 
-    reader.onerror = function () {
-      alert("Unable to open the selected file.");
-      setEmailList([]);
+    reader.onerror = () => {
+      setStatus("Unable to open the selected file.");
     };
 
     reader.readAsArrayBuffer(file);
-  }
+  };
 
-  // Send emails through the deployed backend
-  async function send() {
+  // Manually entered email addresses
+  const handleEmailTextChange = (event) => {
+    const value = event.target.value;
+    setEmailText(value);
+
+    const emails = value
+      .split(/[\s,;]+/)
+      .map((email) => email.trim())
+      .filter(Boolean);
+
+    setEmailList([...new Set(emails)]);
+    setStatus("");
+  };
+
+  // Send emails through backend
+  const handleSendEmail = async (event) => {
+    event.preventDefault();
+
+    const cleanEmails = [
+      ...new Set(
+        emailText
+          .split(/[\s,;]+/)
+          .map((email) => email.trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    const invalidEmails = cleanEmails.filter(
+      (email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    );
+
     if (!msg.trim()) {
-      alert("Please enter an email message.");
+      setStatus("Please enter an email message.");
       return;
     }
 
-    if (emailList.length === 0) {
-      alert("Please upload an Excel file containing email addresses.");
+    if (cleanEmails.length === 0) {
+      setStatus("Please enter or upload email addresses.");
       return;
     }
 
-    setstatus(true);
+    if (invalidEmails.length > 0) {
+      setStatus(`Invalid email address: ${invalidEmails[0]}`);
+      return;
+    }
+
+    if (cleanEmails.length > 100) {
+      setStatus("Maximum 100 email addresses are allowed per request.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Send this email to ${cleanEmails.length} recipient(s)?`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    setStatus("Sending emails... Please wait.");
 
     try {
       const response = await axios.post(
         `${API_URL}/sendemail`,
         {
           msg: msg.trim(),
-          emailList: emailList,
+          emailList: cleanEmails,
         },
         {
           timeout: 120000,
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
       );
 
       if (response.data?.success === true) {
-        alert(response.data.message || "Emails sent successfully!");
+        setStatus(
+          response.data.message ||
+            `Email request completed. Sent: ${response.data.sent ?? "unknown"}, failed: ${response.data.failed ?? "unknown"}.`
+        );
       } else {
-        alert(
-          response.data?.error ||
-            response.data?.message ||
-            "Email sending failed."
+        setStatus(
+          response.data?.message || "The backend could not send the emails."
         );
       }
     } catch (error) {
-      console.error("Axios error:", error);
+      console.error("Email sending error:", error);
 
       if (error.response) {
-        const message =
-          error.response.data?.error ||
-          error.response.data?.message ||
-          `Backend returned status ${error.response.status}`;
-
-        alert("Backend error: " + message);
+        setStatus(
+          `Backend error (${error.response.status}): ${
+            error.response.data?.message || "Request failed."
+          }`
+        );
       } else if (error.code === "ECONNABORTED") {
-        alert(
-          "Request timed out. Check the backend logs to see whether email sending is still running."
-        );
-      } else if (error.request) {
-        alert(
-          "Cannot connect to backend. Check the deployment URL, backend logs, and CORS settings."
-        );
+        setStatus("Request timed out. Check your backend logs before retrying.");
       } else {
-        alert("Error: " + error.message);
+        setStatus(
+          "Unable to connect to the backend. Check the API URL and backend deployment."
+        );
       }
     } finally {
-      setstatus(false);
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen">
-      <header className="bg-blue-900 text-center">
-        <h1 className="text-2xl font-medium text-white px-5 py-5">
+    <div className="min-h-screen bg-slate-100 px-4 py-10">
+      <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-lg sm:p-8">
+        <h1 className="mb-2 text-center text-3xl font-bold text-blue-700">
           BulkMail
         </h1>
-      </header>
 
-      <section className="bg-blue-800 text-center">
-        <h2 className="text-xl font-medium text-white px-5 py-5">
-          Send emails to multiple recipients
-        </h2>
-      </section>
+        <p className="mb-8 text-center text-gray-500">
+          Send emails to your recipient list
+        </p>
 
-      <section className="bg-blue-600 text-center">
-        <h2 className="text-xl font-medium text-white px-5 py-5">
-          Upload your Excel file
-        </h2>
-      </section>
+        <form onSubmit={handleSendEmail} className="space-y-6">
+          <div>
+            <label
+              htmlFor="emailFile"
+              className="mb-2 block font-semibold text-gray-700"
+            >
+              Upload Excel file
+            </label>
 
-      <main className="bg-blue-400 flex flex-col text-black items-center px-5 py-6">
-        <label
-          htmlFor="email-message"
-          className="w-[88%] mb-2 font-medium"
-        >
-          Email message
-        </label>
+            <input
+              id="emailFile"
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileUpload}
+              disabled={loading}
+              className="block w-full rounded-lg border border-gray-300 p-3"
+            />
 
-        <textarea
-          id="email-message"
-          value={msg}
-          onChange={handlemsg}
-          className="w-[88%] h-32 py-2 outline-none px-2 border border-black rounded-md"
-          placeholder="Enter your email message"
-        />
+            <p className="mt-2 text-sm text-gray-500">
+              Upload an Excel or CSV file containing email addresses.
+            </p>
+          </div>
 
-        <div className="w-[88%] mt-5 mb-3">
-          <label
-            htmlFor="excel-file"
-            className="block mb-2 font-medium"
+          <div>
+            <label
+              htmlFor="emailList"
+              className="mb-2 block font-semibold text-gray-700"
+            >
+              Recipient email addresses
+            </label>
+
+            <textarea
+              id="emailList"
+              value={emailText}
+              onChange={handleEmailTextChange}
+              placeholder={"example1@gmail.com\nexample2@gmail.com"}
+              rows={6}
+              disabled={loading}
+              className="w-full rounded-lg border border-gray-300 p-3 outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-sm text-gray-500">
+              {emailList.length} email address(es) detected. Maximum 100 per
+              request.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="message"
+              className="mb-2 block font-semibold text-gray-700"
+            >
+              Email message
+            </label>
+
+            <textarea
+              id="message"
+              value={msg}
+              onChange={(event) => setMsg(event.target.value)}
+              placeholder="Type your email message here..."
+              rows={8}
+              disabled={loading}
+              className="w-full rounded-lg border border-gray-300 p-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {status && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="break-words rounded-lg bg-blue-50 p-4 text-sm text-blue-800"
+            >
+              {status}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full rounded-lg px-6 py-3 font-semibold text-white transition ${
+              loading
+                ? "cursor-not-allowed bg-gray-400"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            Select Excel file (.xlsx or .xls)
-          </label>
-
-          <input
-            id="excel-file"
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handlefile}
-            className="w-full border-2 border-dashed border-black py-4 px-4 rounded-md"
-          />
-        </div>
-
-        <p className="mb-4 font-medium">
-          Total emails: {emailList.length}
-        </p>
-
-        <button
-          type="button"
-          onClick={send}
-          disabled={status}
-          className="bg-blue-900 py-2 px-6 text-white font-medium rounded-md disabled:opacity-50"
-        >
-          {status ? "Sending..." : "Send"}
-        </button>
-      </main>
-
-      <footer className="bg-blue-200 text-center py-5">
-        <p className="text-sm text-gray-700">
-          BulkMail - Email campaign tool
-        </p>
-      </footer>
+            {loading ? "Sending..." : "Send Emails"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
 
 export default App;
+```
