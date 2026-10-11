@@ -3,7 +3,7 @@ import { useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
-const API_URL = "https://bulkmail-backend-5sew.vercel.app"
+const API_URL = "https://bulkmail-backend-5sew.vercel.app/"
 
 function App() {
   const [msg, setmsg] = useState("");
@@ -84,7 +84,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        ""https://your-bulkmail-backend.vercel.app/sendemail"",
+        "https://bulkmail-backend-5sew.vercel.app/",
         {
           msg: msg,
           emailList: emailList
