@@ -1,8 +1,9 @@
+```jsx
 import { useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 
-const API_URL = "https://bulkmail-backend-5sew.vercel.app";
+const API_URL = "https://bulkmail-backend-9r52.vercel.app";
 
 function App() {
   const [msg, setmsg] = useState("");
@@ -10,8 +11,8 @@ function App() {
   const [emailList, setEmailList] = useState([]);
 
   // Handle message input
-  function handlemsg(evt) {
-    setmsg(evt.target.value);
+  function handlemsg(event) {
+    setmsg(event.target.value);
   }
 
   // Handle Excel file upload
@@ -25,11 +26,9 @@ function App() {
 
     const reader = new FileReader();
 
-    reader.onload = function (e) {
+    reader.onload = function (event) {
       try {
-        const data = e.target.result;
-
-        const workbook = XLSX.read(data, {
+        const workbook = XLSX.read(event.target.result, {
           type: "array",
         });
 
@@ -41,18 +40,23 @@ function App() {
           defval: "",
         });
 
-        // Read email addresses from the first column
-        const totalemail = rows
-          .map(function (row) {
-            return String(row[0] || "").trim();
-          })
-          .filter(function (email) {
-            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-          });
+        const emails = [
+          ...new Set(
+            rows
+              .map((row) => String(row[0] || "").trim())
+              .filter((email) =>
+                /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+              )
+          ),
+        ];
 
-        setEmailList([...new Set(totalemail)]);
+        setEmailList(emails);
 
-        console.log("Email list:", totalemail);
+        if (emails.length === 0) {
+          alert(
+            "No valid email addresses found in the first column."
+          );
+        }
       } catch (error) {
         console.error("Excel file error:", error);
         alert("Unable to read this Excel file.");
@@ -68,7 +72,7 @@ function App() {
     reader.readAsArrayBuffer(file);
   }
 
-  // Send emails through backend
+  // Send emails through the deployed backend
   async function send() {
     if (!msg.trim()) {
       alert("Please enter an email message.");
@@ -83,36 +87,43 @@ function App() {
     setstatus(true);
 
     try {
-      const response = await axios.post(`${API_URL}/`, {
-        msg: msg,
-        emailList: emailList,
-      });
+      const response = await axios.post(
+        `${API_URL}/sendemail`,
+        {
+          msg: msg.trim(),
+          emailList: emailList,
+        },
+        {
+          timeout: 120000,
+        }
+      );
 
-      if (
-        response.data === true ||
-        response.data?.success === true
-      ) {
-        alert("Emails sent successfully!");
+      if (response.data?.success === true) {
+        alert(response.data.message || "Emails sent successfully!");
       } else {
         alert(
-          response.data?.message ||
-            "Request completed, but email sending was not confirmed."
+          response.data?.error ||
+            response.data?.message ||
+            "Email sending failed."
         );
       }
     } catch (error) {
       console.error("Axios error:", error);
 
       if (error.response) {
-        const errorMessage =
-          error.response.data?.details ||
+        const message =
           error.response.data?.error ||
           error.response.data?.message ||
-          "Request failed";
+          `Backend returned status ${error.response.status}`;
 
-        alert("Backend error: " + errorMessage);
+        alert("Backend error: " + message);
+      } else if (error.code === "ECONNABORTED") {
+        alert(
+          "Request timed out. Check the backend logs to see whether email sending is still running."
+        );
       } else if (error.request) {
         alert(
-          "Cannot connect to backend. Check the backend URL, deployment status, and CORS settings."
+          "Cannot connect to backend. Check the deployment URL, backend logs, and CORS settings."
         );
       } else {
         alert("Error: " + error.message);
@@ -124,25 +135,25 @@ function App() {
 
   return (
     <div className="min-h-screen">
-      <div className="bg-blue-900 text-center">
+      <header className="bg-blue-900 text-center">
         <h1 className="text-2xl font-medium text-white px-5 py-5">
           BulkMail
         </h1>
-      </div>
+      </header>
 
-      <div className="bg-blue-800 text-center">
+      <section className="bg-blue-800 text-center">
         <h2 className="text-xl font-medium text-white px-5 py-5">
-          We can help your business by sending multiple emails at once
+          Send emails to multiple recipients
         </h2>
-      </div>
+      </section>
 
-      <div className="bg-blue-600 text-center">
+      <section className="bg-blue-600 text-center">
         <h2 className="text-xl font-medium text-white px-5 py-5">
           Upload your Excel file
         </h2>
-      </div>
+      </section>
 
-      <div className="bg-blue-400 flex flex-col text-black items-center px-5 py-6">
+      <main className="bg-blue-400 flex flex-col text-black items-center px-5 py-6">
         <label
           htmlFor="email-message"
           className="w-[88%] mb-2 font-medium"
@@ -155,7 +166,7 @@ function App() {
           value={msg}
           onChange={handlemsg}
           className="w-[88%] h-32 py-2 outline-none px-2 border border-black rounded-md"
-          placeholder="Enter the email text"
+          placeholder="Enter your email message"
         />
 
         <div className="w-[88%] mt-5 mb-3">
@@ -176,7 +187,7 @@ function App() {
         </div>
 
         <p className="mb-4 font-medium">
-          Total emails in the file: {emailList.length}
+          Total emails: {emailList.length}
         </p>
 
         <button
@@ -187,7 +198,7 @@ function App() {
         >
           {status ? "Sending..." : "Send"}
         </button>
-      </div>
+      </main>
 
       <footer className="bg-blue-200 text-center py-5">
         <p className="text-sm text-gray-700">
@@ -199,3 +210,4 @@ function App() {
 }
 
 export default App;
+```
